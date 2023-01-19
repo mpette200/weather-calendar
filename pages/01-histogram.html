@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Histogram</title>
+</head>
+<body>
+<div id="out01"></div>
+</body>
+<script type="module">
+
+// data driven documents
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+// zip unzip compression
+import * as fflate from 'https://cdn.skypack.dev/fflate?min';
+
+import { Histogram, Scrubber } from "/lib_observable.js";
+
+const out01 = d3.select("#out01");
+const windowWidth = document.defaultView.innerWidth;
+const width = Math.min(800, windowWidth);
+const showJson = a => JSON.stringify(a, null, 4);
+
+const fetchAndDeflate = async (url) => {
+    const buffer = new Uint8Array(await d3.buffer(url));
+    const bytes = fflate.gunzipSync(buffer);
+    return new TextDecoder("utf-8").decode(bytes);
+};
+
+const parseCSV = (txt) => {
+    return d3.csvParse(txt, (d) => {
+        return {
+            valid_time_gmt: d3.isoParse(d.valid_time_gmt),
+            temp: +d.temp
+        };
+    });
+};
+
+const computeStats = (flat_data, data, numBins) => {
+    // min max range
+    // max frequency when making histogram with numBins
+    const binGenerator = d3.bin()
+                .thresholds(numBins)
+                .value(d => d.temp);
+    const freqs = data.map(d => {
+        let arr = binGenerator(d[1]);
+        // max frequency of each individual year
+        // is length of array
+        return d3.max(arr.map(g => g.length));
+    });
+    return {
+        minMaxRange: d3.extent(flat_data, d => d.temp),
+        maxFreq: d3.max(freqs)
+    };
+};
+
+const f02 = async () => {
+    const thresholds = 40;
+    var flat_data = await fetchAndDeflate("/bristol_wu.csv.gz");
+    flat_data = parseCSV(flat_data);
+    const data = d3.groups(flat_data, d => d.valid_time_gmt.getUTCFullYear());
+    // Example of grouped output
+    // [
+    //     [
+    //         2004,
+    //         [
+    //             {
+    //                 "valid_time_gmt": "2004-01-01T05:20:00.000Z",
+    //                 "temp": 5
+    //             }]]]
+
+    const stats = computeStats(flat_data, data, thresholds);
+    // stats are {minMaxRange, maxFreq}
+
+    const year_slider = Scrubber(data, {
+        format: x => `Year ${x[0]}`,
+        autoplay: false,
+        delay: 200
+    });
+    const makeHistogram = (data) => Histogram(
+        data, {
+            value: d => d.temp,
+            label: "Temperature (ºC)",
+            xDomain: stats.minMaxRange,
+            yDomain: [0, stats.maxFreq],
+            thresholds: thresholds,
+            width: width,
+            height: 400,
+            color: "steelblue"
+        }
+    );
+    out01.append(() => year_slider);
+    const get_year_data = () => data[year_slider.i.valueAsNumber][1];
+    const histogram = out01.append(() => makeHistogram(get_year_data()));
+
+    year_slider.addEventListener("input", (event) => {
+        const newHistogram = makeHistogram(get_year_data());
+        histogram.html(newHistogram.innerHTML);
+    });
+
+    // show txt rep for debugging
+    // const txtOut = out01.append("pre")
+    // txtOut.text(showJson(data.map(d => [d[0], d[1].slice(0, 10)])));
+};
+
+f02();
+</script>
+</html>
