@@ -123,7 +123,7 @@ function Scrubber(
     div.innerHTML = 
     `<form style="font: 12px var(--sans-serif); font-variant-numeric: tabular-nums; display: flex; height: 33px; align-items: center;">
         <button name=b type=button style="margin-right: 0.4em; width: 5em;"></button>
-        <label style="display: flex; align-items: center; width: 100%;">
+        <label style="display: flex; align-items: center; width: 100%; max-width: 800px">
             <input name=i type=range min=0 max=${values.length - 1} value=${initial} step=1 style="width: 70%;">
             <output name=o style="margin-left: 0.4em;"></output>
         </label>

@@ -18,6 +18,10 @@ import * as fflate from 'https://cdn.skypack.dev/fflate?min';
 
 import { Histogram, Scrubber } from "./lib_observable.js";
 
+// column position in input data
+const DATE_I = 0;
+const TEMPERATURE_I = 1;
+
 const out01 = d3.select("#out01");
 const windowWidth = document.defaultView.innerWidth;
 const width = Math.min(800, windowWidth);
@@ -30,11 +34,14 @@ const fetchAndDeflate = async (url) => {
 };
 
 const parseCSV = (txt) => {
-    return d3.csvParse(txt, (d) => {
-        return {
-            valid_time_gmt: d3.isoParse(d.valid_time_gmt),
-            temp: +d.temp
-        };
+    return d3.csvParseRows(txt, (d, i) => {
+        if (i == 0) {
+            return null;
+        }
+        return [
+            d3.isoParse(d[DATE_I]),
+            +d[TEMPERATURE_I]
+        ];
     });
 };
 
@@ -43,7 +50,7 @@ const computeStats = (flat_data, data, numBins) => {
     // max frequency when making histogram with numBins
     const binGenerator = d3.bin()
                 .thresholds(numBins)
-                .value(d => d.temp);
+                .value(d => d[TEMPERATURE_I]);
     const freqs = data.map(d => {
         let arr = binGenerator(d[1]);
         // max frequency of each individual year
@@ -51,25 +58,25 @@ const computeStats = (flat_data, data, numBins) => {
         return d3.max(arr.map(g => g.length));
     });
     return {
-        minMaxRange: d3.extent(flat_data, d => d.temp),
+        minMaxRange: d3.extent(flat_data, d => d[TEMPERATURE_I]),
         maxFreq: d3.max(freqs)
     };
 };
 
 const f02 = async () => {
     const thresholds = 40;
-    var flat_data = await fetchAndDeflate("bristol_wu.csv.gz");
+    var flat_data = await fetchAndDeflate("bristol_wu_s.csv.gz");
     flat_data = parseCSV(flat_data);
-    const data = d3.groups(flat_data, d => d.valid_time_gmt.getUTCFullYear());
+    const data = d3.groups(flat_data, d => d[DATE_I].getUTCFullYear());
     // Example of grouped output
     // [
     //     [
     //         2004,
     //         [
-    //             {
-    //                 "valid_time_gmt": "2004-01-01T05:20:00.000Z",
-    //                 "temp": 5
-    //             }]]]
+    //             [
+    //                 2004-01-01T05:20:00.000Z,
+    //                 5
+    //             ]]]]
 
     const stats = computeStats(flat_data, data, thresholds);
     // stats are {minMaxRange, maxFreq}
@@ -81,8 +88,8 @@ const f02 = async () => {
     });
     const makeHistogram = (data) => Histogram(
         data, {
-            value: d => d.temp,
-            label: "Temperature (ºC)",
+            value: d => d[TEMPERATURE_I],
+            label: "Temperature (°C)",
             xDomain: stats.minMaxRange,
             yDomain: [0, stats.maxFreq],
             thresholds: thresholds,
