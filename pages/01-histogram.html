@@ -6,6 +6,10 @@
     <title>Weather Histogram</title>
 </head>
 <body>
+<div id="load-spinner-01">
+    <p>Loading data ...</p>
+    <img src="loader-spinner.gif" alt="wait loading">
+</div>
 <div id="out01"></div>
 </body>
 <script type="module">
@@ -22,7 +26,9 @@ import { Histogram, Scrubber } from "./lib_observable.js";
 const DATE_I = 0;
 const TEMPERATURE_I = 1;
 
+const load_spinner_01 = d3.select("#load-spinner-01");
 const out01 = d3.select("#out01");
+
 const windowWidth = document.defaultView.innerWidth;
 const width = Math.min(800, windowWidth);
 const showJson = a => JSON.stringify(a, null, 4);
@@ -86,6 +92,8 @@ const f02 = async () => {
         autoplay: false,
         delay: 200
     });
+    const get_year_data = () => data[year_slider.i.valueAsNumber][1];
+
     const makeHistogram = (data) => Histogram(
         data, {
             value: d => d[TEMPERATURE_I],
@@ -98,14 +106,16 @@ const f02 = async () => {
             color: "steelblue"
         }
     );
-    out01.append(() => year_slider);
-    const get_year_data = () => data[year_slider.i.valueAsNumber][1];
-    const histogram = out01.append(() => makeHistogram(get_year_data()));
 
     year_slider.addEventListener("input", (event) => {
         const newHistogram = makeHistogram(get_year_data());
         histogram.html(newHistogram.innerHTML);
     });
+
+    // ready to display so hide loading spinner before appending objects
+    load_spinner_01.property("hidden", true);
+    out01.append(() => year_slider);
+    const histogram = out01.append(() => makeHistogram(get_year_data()));
 
     // show txt rep for debugging
     // const txtOut = out01.append("pre")
