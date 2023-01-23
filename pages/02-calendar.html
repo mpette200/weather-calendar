@@ -263,6 +263,7 @@ async function main() {
         year_slider.i.valueAsNumber,
         i
     );
+    var displayedYearIdx = year_slider.i.valueAsNumber;
 
     const updateQueue = [];
     const clearQueue = () => {
@@ -270,27 +271,40 @@ async function main() {
             clearTimeout(updateQueue.shift());
         }
     };
-    year_slider.addEventListener("input", event => {
+    const dispatchUpdate = event => {
+        clearQueue();
+        if (displayedYearIdx == year_slider.i.valueAsNumber) {
+            return;
+        }
+        // load spinner gets removed elsewhere so have to add it again here
         const load_spinner_02 = out01.select("output").append(() => load_spinner_02_node);
         // Scroll bar can become unresponsive on slow systems.
-        // Therefore put into a queue and schedule update for a later time.
-        // However if play button is pressed don't use the queue, causing
-        // progress to block until update completed.
-        clearQueue();
+        // Therefore put into a queue and schedule update for later.
+        // To avoid lots of events building up in the queue, clear queue
+        // before starting so that only the latest event is kept.
+        updateQueue.push(setTimeout(() => {
+            requestAnimationFrame(() => {
+                load_spinner_02.property("hidden", false);
+                requestAnimationFrame(() => {
+                    updateCharts(get_month_data, minMaxRange, charts);
+                    displayedYearIdx = year_slider.i.valueAsNumber;
+                    load_spinner_02.property("hidden", true);
+                });
+            })
+        },
+            10
+        ));
+    };
+
+    const updateTriggers = ["mouseup", "keyup", "touchend"];
+    for (let trigger of updateTriggers) {
+        year_slider.addEventListener(trigger, dispatchUpdate);
+    }
+
+    year_slider.addEventListener("input", event => {
         if (event.isFromPlayButton) {
             updateCharts(get_month_data, minMaxRange, charts);
-        } else {
-            updateQueue.push(setTimeout(() => {
-                requestAnimationFrame(() => {
-                    load_spinner_02.property("hidden", false);
-                    requestAnimationFrame(() => {
-                        updateCharts(get_month_data, minMaxRange, charts);
-                        load_spinner_02.property("hidden", true);
-                    });
-                });
-            },
-                300
-            ));
+            displayedYearIdx = year_slider.i.valueAsNumber;
         }
     });
 
