@@ -13,17 +13,20 @@
 </style>
 </head>
 <body>
+<div id="out01"></div>
 <div id="load-spinner-01">
     <p>Loading data ...</p>
     <img src="loader-spinner.gif" alt="wait loading">
 </div>
-<div id="out01"></div>
 <div id="out02", class="grid-400w"></div>
 </body>
 <script type="module">
 
 // data driven documents
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+// tagged template literals (backtick quoted strings)
+import * as htl from "https://cdn.jsdelivr.net/npm/htl@0.3.1/src/index.js";
 
 // plotting library
 import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
@@ -57,6 +60,11 @@ const RANDOM_SEED = 662;
 const load_spinner_01 = d3.select("#load-spinner-01");
 const out01 = d3.select("#out01");
 const out02 = d3.select("#out02");
+const load_spinner_02_node =
+htl.html`<span id="load_spinner_02" hidden="true">
+    <img src="loader-spinner.gif" alt="wait loading">
+</span>`;
+const load_spinner_02 = d3.select(load_spinner_02_node);
 
 function showJson(a) {
     return JSON.stringify(a, null, 4);
@@ -182,6 +190,18 @@ function label_month(plot, i) {
         .text(months[i]);
 }
 
+function updateCharts(monthGetter, minMaxRange, currentCharts) {
+    const dotLabel = `[aria-label="dot"]`;
+        for (let i=0; i < 12; i++) {
+            let dots = d3
+                .select(makeChart(monthGetter(i), minMaxRange)())
+                .select(dotLabel)
+                .node();
+            currentCharts[i].select(dotLabel).remove();
+            currentCharts[i].append(() => dots);
+        }
+}
+
 async function main() {
     var flat_data = await fetchAndDeflate("bristol_wu_s.csv.gz");
     flat_data = parseCSV(flat_data);
@@ -244,15 +264,33 @@ async function main() {
         i
     );
 
+    const updateQueue = [];
+    const clearQueue = () => {
+        while (updateQueue.length > 0) {
+            clearTimeout(updateQueue.shift());
+        }
+    };
     year_slider.addEventListener("input", event => {
-        const dotLabel = `[aria-label="dot"]`;
-        for (let i=0; i < 12; i++) {
-            let dots = d3
-                .select(makeChart(get_month_data(i), minMaxRange)())
-                .select(dotLabel)
-                .node();
-            charts[i].select(dotLabel).remove();
-            charts[i].append(() => dots);
+        const load_spinner_02 = out01.select("output").append(() => load_spinner_02_node);
+        // Scroll bar can become unresponsive on slow systems.
+        // Therefore put into a queue and schedule update for a later time.
+        // However if play button is pressed don't use the queue, causing
+        // progress to block until update completed.
+        clearQueue();
+        if (event.isFromPlayButton) {
+            updateCharts(get_month_data, minMaxRange, charts);
+        } else {
+            updateQueue.push(setTimeout(() => {
+                requestAnimationFrame(() => {
+                    load_spinner_02.property("hidden", false);
+                    requestAnimationFrame(() => {
+                        updateCharts(get_month_data, minMaxRange, charts);
+                        load_spinner_02.property("hidden", true);
+                    });
+                });
+            },
+                300
+            ));
         }
     });
 

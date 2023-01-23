@@ -160,9 +160,16 @@ function Scrubber(
       if (delay === null) frame = requestAnimationFrame(tick);
       step();
     }
+    function customInputEvent() {
+      let event = new Event("input", {bubbles: true});
+      // use this property to distinguish animation originating from
+      // a click of the play button
+      event.isFromPlayButton = true;
+      return event;
+    }
     function step() {
       form.i.valueAsNumber = (form.i.valueAsNumber + direction + values.length) % values.length;
-      form.i.dispatchEvent(new Event("input", {bubbles: true}));
+      form.i.dispatchEvent(customInputEvent());
     }
     form.i.oninput = event => {
       if (event && event.isTrusted && running()) stop();
@@ -173,7 +180,7 @@ function Scrubber(
       if (running()) return stop();
       direction = alternate && form.i.valueAsNumber === values.length - 1 ? -1 : 1;
       form.i.valueAsNumber = (form.i.valueAsNumber + direction) % values.length;
-      form.i.dispatchEvent(new Event("input", {bubbles: true}));
+      form.i.dispatchEvent(customInputEvent());
       start();
     };
     form.i.oninput();
