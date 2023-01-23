@@ -5,20 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weather Calendar</title>
 <style>
+.page-heading {
+    font: 1em sans-serif;
+}
 .grid-400w {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
     row-gap: 10px;
 }
+.footnotes {
+    font: 0.9em sans-serif;
+}
 </style>
 </head>
 <body>
+<div class="page-heading">
+    <h2>Temperature Data Visualized - Bristol Airport</h2>
+</div>
 <div id="out01"></div>
 <div id="load-spinner-01">
     <p>Loading data ...</p>
     <img src="loader-spinner.gif" alt="wait loading">
 </div>
 <div id="out02", class="grid-400w"></div>
+<div class="footnotes">
+    <p>Notes</p>
+    <p>
+        Weather data obtained by scraping public data from <a href="https://www.wunderground.com/" target="_blank">https://www.wunderground.com/</a>
+        for Bristol Airport weather station. The data may contain errors or omissions and may not be evenly distributed
+        across time intervals resulting in misleading visualizations.
+    </p>
+    <p>
+        Plotting methodology based on a &quot;Strip Plot&quot; with random jitter.
+        <a href="https://www.google.com/search?q=jitter+strip+plot" target="_blank">https://www.google.com/search?q=jitter+strip+plot</a>.
+        For each day of the month, the temperatures that occur at the same time of day (hour) are grouped into the same strip.
+        Random jitter and transparency are used to help visualize overlapping points.
+    </p>
+    <p>
+        Animation of the plots may perform poorly on mobile devices or slower devices.
+    </p>
+    <p>
+        Plots created using the D3 <a href="https://d3js.org/" target="_blank">https://d3js.org/</a>
+        and Observable Plot <a href="https://observablehq.com/@observablehq/plot" target="_blank">https://observablehq.com/@observablehq/plot</a>
+        libraries.
+    </p>
+    <p>
+        Source code from which the plots were generated can be obtained here:
+        <a href="https://github.com/mpette200/weather-calendar" target="_blank">https://github.com/mpette200/weather-calendar</a>
+    </p>
+</div>
 </body>
 <script type="module">
 
@@ -149,9 +184,9 @@ function makeChart(dataGetter, minMaxRange) {
             r: POINT_SIZE,
             symbol: "circle",
             fill: "red",
-            fillOpacity: 0.3,
+            fillOpacity: 0.1,
             stroke: "black",
-            strokeOpacity: 0.4,
+            strokeOpacity: 0.2,
             strokeWidth: 1
         }
     ).plot({
