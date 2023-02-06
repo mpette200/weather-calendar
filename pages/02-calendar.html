@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather Calendar</title>
+    <title>Weather Calendar - Bristol Airport</title>
 <style>
 .page-heading {
     font: 1em sans-serif;
@@ -128,7 +128,7 @@ function get_year_month_group(d, year, month) {
 }
 
 function count_overlapping(d) {
-    // accumulator[hour][temperature] = count
+    // accumulator[hour][temperature] contains the count
     return d.reduce((accumulator, cur) => {
         let hour = cur[DATE_I].getUTCHours();
         let temp = cur[TEMPERATURE_I];
@@ -303,7 +303,7 @@ async function main() {
     const updateQueue = [];
     const clearQueue = () => {
         while (updateQueue.length > 0) {
-            clearTimeout(updateQueue.shift());
+            cancelAnimationFrame(updateQueue.shift());
         }
     };
     const dispatchUpdate = event => {
@@ -317,7 +317,7 @@ async function main() {
         // Therefore put into a queue and schedule update for later.
         // To avoid lots of events building up in the queue, clear queue
         // before starting so that only the latest event is kept.
-        updateQueue.push(setTimeout(() => {
+        updateQueue.push(
             requestAnimationFrame(() => {
                 load_spinner_02.property("hidden", false);
                 requestAnimationFrame(() => {
@@ -326,9 +326,7 @@ async function main() {
                     load_spinner_02.property("hidden", true);
                 });
             })
-        },
-            10
-        ));
+        );
     };
 
     const updateTriggers = ["mouseup", "keyup", "touchend"];

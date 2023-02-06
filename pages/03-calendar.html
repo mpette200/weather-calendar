@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Calendar - Birmingham Airport</title>
+<style>
+.page-heading {
+    font: 1em sans-serif;
+}
+.grid-400w {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    row-gap: 10px;
+}
+.footnotes {
+    font: 0.9em sans-serif;
+}
+</style>
+</head>
+<body>
+<div class="page-heading">
+    <h2>Temperature Data Visualized - Birmingham Airport</h2>
+</div>
+<div id="out01"></div>
+<div id="load-spinner-01">
+    <p>Loading data ...</p>
+    <img src="loader-spinner.gif" alt="wait loading">
+</div>
+<div id="out02", class="grid-400w"></div>
+<div class="footnotes">
+    <p>Notes</p>
+    <p>
+        Weather data obtained from <a href="https://meteostat.net/" target="_blank">https://meteostat.net/</a>
+        for Birmingham Airport weather station. The data may contain errors or omissions and may not be evenly distributed
+        across time intervals resulting in misleading visualizations.
+    </p>
+    <p>
+        Plotting methodology based on a &quot;Strip Plot&quot; with random jitter.
+        <a href="https://www.google.com/search?q=jitter+strip+plot" target="_blank">https://www.google.com/search?q=jitter+strip+plot</a>.
+        For each day of the month, the temperatures that occur at the same time of day (hour) are grouped into the same strip.
+        Random jitter and transparency are used to help visualize overlapping points.
+    </p>
+    <p>
+        Animation of the plots may perform poorly on mobile devices or slower devices.
+    </p>
+    <p>
+        Plots created using the D3 <a href="https://d3js.org/" target="_blank">https://d3js.org/</a>
+        and Observable Plot <a href="https://observablehq.com/@observablehq/plot" target="_blank">https://observablehq.com/@observablehq/plot</a>
+        libraries.
+    </p>
+    <p>
+        Source code from which the plots were generated can be obtained here:
+        <a href="https://github.com/mpette200/weather-calendar" target="_blank">https://github.com/mpette200/weather-calendar</a>
+    </p>
+</div>
+</body>
+<script type="module">
+
+// data driven documents
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+// tagged template literals (backtick quoted strings)
+import * as htl from "https://cdn.jsdelivr.net/npm/htl@0.3.1/src/index.js";
+
+// plotting library
+import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";
+
+// zip unzip compression
+import * as fflate from "https://cdn.skypack.dev/fflate@0.7.4?min";
+
+// seeded random numbers
+import { MersenneTwister } from "https://cdn.jsdelivr.net/npm/random-seedable@1.0.8/src/index.js";
+
+// customised classes
+import { Scrubber } from "./lib_observable.js";
+
+// column numbers to correspond with input data
+const DATE_I = 0;
+const TEMPERATURE_I = 1;
+
+// subplot sizes
+const WIDTH = 400;
+const HEIGHT = 280;
+const MARGIN_BOTTOM = 55;
+const LABEL_OFFSET = 30;
+const LABEL_MONTH_OFFSET = 45;
+
+// point configuration
+const POINT_SIZE = 3;
+const X_JITTER = 0.3;
+const Y_JITTER = 0.3;
+const RANDOM_SEED = 662;
+
+const load_spinner_01 = d3.select("#load-spinner-01");
+const out01 = d3.select("#out01");
+const out02 = d3.select("#out02");
+const load_spinner_02_node =
+htl.html`<span id="load_spinner_02" hidden="true">
+    <img src="loader-spinner.gif" alt="wait loading">
+</span>`;
+const load_spinner_02 = d3.select(load_spinner_02_node);
+
+function showJson(a) {
+    return JSON.stringify(a, null, 4);
+}
+
+async function fetchAndDeflate(url) {
+    const buffer = new Uint8Array(await d3.buffer(url));
+    const bytes = fflate.gunzipSync(buffer);
+    return new TextDecoder("utf-8").decode(bytes);
+}
+
+function parseCSV(txt) {
+    return d3.csvParseRows(txt, (d, i) => {
+        if (i == 0) {
+            return null;
+        }
+        return [
+            d3.isoParse(d[DATE_I]),
+            +d[TEMPERATURE_I]
+        ];
+    });
+}
+
+function get_year_month_group(d, year, month) {
+    return d[year][1][month][1];
+}
+
+function count_overlapping(d) {
+    // accumulator[hour][temperature] contains the count
+    return d.reduce((accumulator, cur) => {
+        let hour = cur[DATE_I].getUTCHours();
+        let temp = cur[TEMPERATURE_I];
+        if (accumulator[hour] == undefined) {
+            accumulator[hour] = [];
+        }
+        if (accumulator[hour][temp] == undefined) {
+            accumulator[hour][temp] = 0;
+        }
+        accumulator[hour][temp] += 1;
+        return accumulator;
+    }, []);
+}
+
+const random_gen = new MersenneTwister(RANDOM_SEED);
+function randomJitter(n) {
+    // random number between +n and -n
+    return 2 * n * random_gen.float() - n;
+}
+
+function computeJitter(data) {
+    for (const [year, yearData] of data) {
+        for (const [month, monthData] of yearData) {
+            let overlaps = count_overlapping(monthData);
+            // only adds Jitter where points are actually overlapping
+            for (const d of monthData) {
+                let xJitter;
+                let yJitter;
+                let hour = d[DATE_I].getUTCHours();
+                let temp = d[TEMPERATURE_I];
+                if (overlaps[hour][temp] > 2) {
+                    xJitter = randomJitter(X_JITTER);
+                    yJitter = randomJitter(Y_JITTER);
+                } else {
+                    xJitter = 0;
+                    yJitter = 0;
+                }
+                d.push(xJitter);
+                d.push(yJitter);
+            }
+        }
+    }
+}
+
+function makeChart(dataGetter, minMaxRange) {
+    let xJitterIdx = 2;
+    let yJitterIdx = 3;
+    return () => Plot.dot(
+        dataGetter(),
+        {
+            x: d => d[DATE_I].getUTCHours() + d[xJitterIdx],
+            y: d => d[TEMPERATURE_I] + d[yJitterIdx],
+            r: POINT_SIZE,
+            symbol: "circle",
+            fill: "red",
+            fillOpacity: 0.1,
+            stroke: "black",
+            strokeOpacity: 0.2,
+            strokeWidth: 1
+        }
+    ).plot({
+        height: HEIGHT,
+        width: WIDTH,
+        marginBottom: MARGIN_BOTTOM,
+        x: {
+            label: "Hour",
+            labelAnchor: "center",
+            labelOffset: LABEL_OFFSET,
+            ticks: Array.from({length: 8}, (_, i) => 3*i)
+        },
+        y: {
+            label: "Temperature",
+            domain: minMaxRange,
+            grid: true
+        }
+    });
+}
+
+function label_month(plot, i) {
+    const months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ];
+    const axisLabel = `[aria-label="x-axis"]`;
+    const range = plot.scale("x").range;
+    const mid = Math.floor((range[1] + range[0]) / 2);
+    d3.select(plot)
+        .select(axisLabel)
+        .append("text")
+        .attr("fill", "currentColor")
+        .attr("transform", `translate (${mid}, ${LABEL_MONTH_OFFSET})`)
+        .attr("text-anchor", "middle")
+        .style("font", "bold 1.5em sans-serif")
+        .text(months[i]);
+}
+
+function updateCharts(monthGetter, minMaxRange, currentCharts) {
+    const dotLabel = `[aria-label="dot"]`;
+        for (let i=0; i < 12; i++) {
+            let dots = d3
+                .select(makeChart(monthGetter(i), minMaxRange)())
+                .select(dotLabel)
+                .node();
+            currentCharts[i].select(dotLabel).remove();
+            currentCharts[i].append(() => dots);
+        }
+}
+
+async function main() {
+    var flat_data = await fetchAndDeflate("03534_birmingham.csv.gz");
+    flat_data = parseCSV(flat_data);
+    const minMaxRange = d3.extent(flat_data, d => d[TEMPERATURE_I]);
+
+    var data = d3.groups(flat_data, d => d[DATE_I].getUTCFullYear());
+    // Example of grouped output by Year
+    // [
+    //     [
+    //         2004,
+    //         [
+    //             [
+    //                 2004-01-01T05:20:00.000Z,
+    //                 5
+    //             ]]]]
+
+    data = data.map(d => [
+        d[0],
+        d3.groups(d[1], e => e[DATE_I].getUTCMonth())
+    ]);
+
+    // Example of nested grouping by both Year and Month
+    // [
+    //     [
+    //         2004,
+    //         [
+    //             [
+    //                 0,
+    //                 [
+    //                     [
+    //                         "2004-01-01T05:20:00.000Z",
+    //                         5
+    //                     ]]]]]]
+
+    computeJitter(data);
+
+    // Example of nested groupings with Jitter
+    // [
+    //     [
+    //         2004,
+    //         [
+    //             [
+    //                 0,
+    //                 [
+    //                     [
+    //                         "2004-01-01T05:20:00.000Z",
+    //                         5,
+    //                         xJitter,
+    //                         yJitter
+    //                     ]]]]]]
+
+    const year_slider = Scrubber(data, {
+        format: x => `Year ${x[0]}`,
+        autoplay: false,
+        delay: 500
+    });
+    const get_month_data = i => () => get_year_month_group(
+        data,
+        year_slider.i.valueAsNumber,
+        i
+    );
+    var displayedYearIdx = year_slider.i.valueAsNumber;
+
+    const updateQueue = [];
+    const clearQueue = () => {
+        while (updateQueue.length > 0) {
+            cancelAnimationFrame(updateQueue.shift());
+        }
+    };
+    const dispatchUpdate = event => {
+        clearQueue();
+        if (displayedYearIdx == year_slider.i.valueAsNumber) {
+            return;
+        }
+        // load spinner gets removed elsewhere so have to add it again here
+        const load_spinner_02 = out01.select("output").append(() => load_spinner_02_node);
+        // Scroll bar can become unresponsive on slow systems.
+        // Therefore put into a queue and schedule update for later.
+        // To avoid lots of events building up in the queue, clear queue
+        // before starting so that only the latest event is kept.
+        updateQueue.push(
+            requestAnimationFrame(() => {
+                load_spinner_02.property("hidden", false);
+                requestAnimationFrame(() => {
+                    updateCharts(get_month_data, minMaxRange, charts);
+                    displayedYearIdx = year_slider.i.valueAsNumber;
+                    load_spinner_02.property("hidden", true);
+                });
+            })
+        );
+    };
+
+    const updateTriggers = ["mouseup", "keyup", "touchend"];
+    for (let trigger of updateTriggers) {
+        year_slider.addEventListener(trigger, dispatchUpdate);
+    }
+
+    year_slider.addEventListener("input", event => {
+        if (event.isFromPlayButton) {
+            updateCharts(get_month_data, minMaxRange, charts);
+            displayedYearIdx = year_slider.i.valueAsNumber;
+        }
+    });
+
+    // ready to display so hide loading spinner before appending objects
+    load_spinner_01.property("hidden", true);
+    out01.append(() => year_slider);
+
+    const charts = [];
+    for (let i=0; i < 12; i++) {
+        let plot = makeChart(get_month_data(i), minMaxRange)();
+        label_month(plot, i);
+        let node = out02.append(() => plot);
+        charts.push(node);
+    }
+
+    // show txt rep for debugging
+    // const txtOut = out01.append("pre")
+    // txtOut.text(showJson(data.slice(0, 4).map(d => [
+    //     d[0],
+    //     d[1].map(e => [
+    //         e[0],
+    //         e[1].slice(0, 5)
+    //     ])
+    // ])));
+}
+
+main();
+</script>
+</html>
