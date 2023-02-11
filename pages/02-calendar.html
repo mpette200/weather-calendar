@@ -84,13 +84,15 @@ const WIDTH = 400;
 const HEIGHT = 280;
 const MARGIN_BOTTOM = 55;
 const LABEL_OFFSET = 30;
-const LABEL_MONTH_OFFSET = 45;
+const LABEL_MONTH_OFFSET = 277;
 
 // point configuration
 const POINT_SIZE = 3;
 const X_JITTER = 0.3;
 const Y_JITTER = 0.3;
 const RANDOM_SEED = 662;
+// to find in child nodes
+const DOT_DESCRIPTION = "dots-red";
 
 const load_spinner_01 = d3.select("#load-spinner-01");
 const out01 = d3.select("#out01");
@@ -187,7 +189,8 @@ function makeChart(dataGetter, minMaxRange) {
             fillOpacity: 0.1,
             stroke: "black",
             strokeOpacity: 0.2,
-            strokeWidth: 1
+            strokeWidth: 1,
+            ariaDescription: DOT_DESCRIPTION
         }
     ).plot({
         height: HEIGHT,
@@ -212,11 +215,11 @@ function label_month(plot, i) {
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
     ];
-    const axisLabel = `[aria-label="x-axis"]`;
+    const dotLabel = `[aria-description="${DOT_DESCRIPTION}"]`;
     const range = plot.scale("x").range;
     const mid = Math.floor((range[1] + range[0]) / 2);
     d3.select(plot)
-        .select(axisLabel)
+        .insert("g", dotLabel)
         .append("text")
         .attr("fill", "currentColor")
         .attr("transform", `translate (${mid}, ${LABEL_MONTH_OFFSET})`)
@@ -226,7 +229,7 @@ function label_month(plot, i) {
 }
 
 function updateCharts(monthGetter, minMaxRange, currentCharts) {
-    const dotLabel = `[aria-label="dot"]`;
+    const dotLabel = `[aria-description="${DOT_DESCRIPTION}"]`;
         for (let i=0; i < 12; i++) {
             let dots = d3
                 .select(makeChart(monthGetter(i), minMaxRange)())
